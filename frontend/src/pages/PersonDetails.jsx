@@ -68,7 +68,7 @@ const PersonDetails = () => {
             </h2>
             <div className="inline-block bg-red-50 px-4 py-2 rounded-xl">
               <p className="text-red-600 font-black uppercase tracking-[0.2em] text-xs">
-                {person.birth_year || '????'} — {person.death_year || '????'}
+                {person.birth_year || '-'} — {person.death_year || '-'}
               </p>
             </div>
           </div>
