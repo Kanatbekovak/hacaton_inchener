@@ -122,28 +122,57 @@
 #     conn.commit()
 #     conn.close()
 #     return {"message": f"Запись {person_id} удалена"}
-
-
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, field_validator
+from fastapi import FastAPI, HTTPException, Depends
+from pydantic import BaseModel
 import sqlite3
 from typing import List, Optional
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Голос из архива API")
 
-# Функция для удобного подключения к базе
+# Настройка CORS, чтобы React мог достучаться до Python
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Модель данных для создания записи
+class PersonCreate(BaseModel):
+    full_name: str
+    birth_year: Optional[int] = None
+    death_year: Optional[int] = None
+    region: str
+    district: Optional[str] = None
+    occupation: Optional[str] = None
+    charge: Optional[str] = None
+    biography: Optional[str] = None
+    source: Optional[str] = None
+    status: Optional[str] = None
+    gender: Optional[str] = None # Добавили пол в модель
+
+# Функция подключения к базе
 def get_db_connection():
     conn = sqlite3.connect('archive.db')
-    conn.row_factory = sqlite3.Row  # Это позволит получать данные как словари
+    conn.row_factory = sqlite3.Row
     return conn
 
 @app.get("/")
 def read_root():
     return {"message": "Добро пожаловать в API проекта 'Голос из архива'"}
 
-# Эндпоинт для получения всех репрессированных с поиском
+# --- ЭНДПОИНТЫ ---
+
+# 1. Получение списка с УЛУЧШЕННЫМИ фильтрами
 @app.get("/api/persons")
-def get_persons(search: Optional[str] = None, region: Optional[str] = None):
+def get_persons(
+    search: Optional[str] = None, 
+    region: Optional[str] = None,
+    gender: Optional[str] = None,
+    status: Optional[str] = None
+):
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -157,6 +186,14 @@ def get_persons(search: Optional[str] = None, region: Optional[str] = None):
     if region:
         query += " AND region = ?"
         params.append(region)
+
+    if gender:
+        query += " AND gender = ?"
+        params.append(gender)
+
+    if status:
+        query += " AND status = ?"
+        params.append(status)
         
     cursor.execute(query, params)
     persons = [dict(row) for row in cursor.fetchall()]
@@ -164,7 +201,7 @@ def get_persons(search: Optional[str] = None, region: Optional[str] = None):
     
     return persons
 
-# Эндпоинт для получения детальной информации об одном человеке
+# 2. Детальная информация
 @app.get("/api/persons/{person_id}")
 def get_person(person_id: int):
     conn = get_db_connection()
@@ -178,38 +215,37 @@ def get_person(person_id: int):
     
     return dict(person)
 
-# Эндпоинт для добавления нового человека
+# 3. Добавление записи
 @app.post("/api/persons", status_code=201)
 def create_person(person: PersonCreate):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        INSERT INTO persons (full_name, birth_year, death_year, region, district, occupation, charge, biography, source, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        person.full_name, person.birth_year, person.death_year,
-        person.region, person.district, person.occupation,
-        person.charge, person.biography, person.source, person.status
-    ))
-    
-    new_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    
-    return {"id": new_id, "message": "Запись успешно создана"}
+    try:
+        cursor.execute('''
+            INSERT INTO persons (full_name, birth_year, death_year, region, district, occupation, charge, biography, source, status, gender)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            person.full_name, person.birth_year, person.death_year,
+            person.region, person.district, person.occupation,
+            person.charge, person.biography, person.source, person.status, person.gender
+        ))
+        new_id = cursor.lastrowid
+        conn.commit()
+        return {"id": new_id, "message": "Запись успешно создана"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
 
-# Эндпоинт для удаления человека по ID
+# 4. Удаление записи
 @app.delete("/api/persons/{person_id}")
 def delete_person(person_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Проверяем, существует ли запись
     cursor.execute("SELECT id FROM persons WHERE id = ?", (person_id,))
-    person = cursor.fetchone()
-    
-    if person is None:
+    if cursor.fetchone() is None:
         conn.close()
         raise HTTPException(status_code=404, detail="Человек не найден")
     

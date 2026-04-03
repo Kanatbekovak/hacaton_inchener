@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 const PersonCard = ({ person }) => {
   return (
     <Link to={`/person/${person.id}`} className="block group">
