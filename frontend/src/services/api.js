@@ -1,4 +1,4 @@
-const API_URL = "https://gratelike-overplainly-reece.ngrok-free.dev/api";
+const API_URL = "https://clara-precrural-nonprolixly.ngrok-free.dev/";
 
 // export const fetchPersons = async (search = "") => {
 //   try {
